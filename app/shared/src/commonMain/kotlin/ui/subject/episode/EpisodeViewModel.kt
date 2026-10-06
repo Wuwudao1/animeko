@@ -447,7 +447,7 @@ open class EpisodeViewModel(
             // 关掉「记住选择」也结束本条目已有的记忆, 否则下一集仍会按旧记忆回放.
             if (!remember) forgetBrowseMemory()
         },
-        onPlay = ::playBrowsedMedia,
+        onPlay = { pick, memory -> playBrowsedMedia(pick.media, memory) },
         backgroundScope = backgroundScope,
     )
 
@@ -696,7 +696,8 @@ open class EpisodeViewModel(
         )
 
     var isFullscreen: Boolean by mutableStateOf(initialIsFullscreen)
-    var sidebarVisible: Boolean by mutableStateOf(true)
+    private val sidebarState = EpisodeSidebarState { isFullscreen }
+    var sidebarVisible: Boolean by sidebarState::isVisible
     val commentLazyGirdState: LazyGridState = LazyGridState()
 
     /**

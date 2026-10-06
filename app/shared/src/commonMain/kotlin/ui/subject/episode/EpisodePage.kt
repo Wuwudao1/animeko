@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContent
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
@@ -168,6 +169,7 @@ import me.him188.ani.app.ui.subject.episode.video.sidesheet.EpisodeSelectorSheet
 import me.him188.ani.app.ui.subject.episode.video.sidesheet.MediaSelectorSheet
 import me.him188.ani.app.ui.subject.episode.video.topbar.EpisodePlayerTitle
 import me.him188.ani.app.ui.watchtogether.LocalWatchTogetherPlayerController
+import me.him188.ani.app.videoplayer.screenshot.playerScreenshotFileName
 import me.him188.ani.app.videoplayer.ui.LocalVideoScaffoldSheetWindowInsets
 import me.him188.ani.app.videoplayer.ui.PlaybackSpeedControllerState
 import me.him188.ani.app.videoplayer.ui.PlayerControllerState
@@ -184,6 +186,8 @@ import me.him188.ani.app.videoplayer.ui.progress.PlayerControllerDefaults.rememb
 import me.him188.ani.app.videoplayer.ui.progress.rememberMediaProgressFramePreviewState
 import me.him188.ani.app.videoplayer.ui.progress.rememberMediaProgressSliderState
 import me.him188.ani.app.videoplayer.ui.rememberPlayerFullscreenState
+import me.him188.ani.app.videoplayer.ui.screenshot.PlayerScreenshotOverlay
+import me.him188.ani.app.videoplayer.ui.screenshot.rememberPlayerScreenshotController
 import me.him188.ani.danmaku.api.DanmakuContent
 import me.him188.ani.danmaku.ui.DanmakuHostState
 import me.him188.ani.danmaku.ui.DanmakuPresentation
@@ -194,7 +198,6 @@ import me.him188.ani.utils.platform.isIos
 import org.jetbrains.compose.resources.stringResource
 import org.openani.mediamp.features.AudioLevelController
 import org.openani.mediamp.features.PlaybackSpeed
-import org.openani.mediamp.features.Screenshots
 import org.openani.mediamp.features.VideoAspectRatio
 import org.openani.mediamp.features.toggleMute
 import org.openani.mediamp.source.MediaData
@@ -509,12 +512,12 @@ private fun EpisodeScreenBody(
         vm.isFullscreen -> fullscreenVideoWindowInsets(compactWindowInsets)
         else -> compactWindowInsets
     }
-    val mode = when {
-        vm.isFullscreen -> EpisodeScreenLayoutMode.VIDEO_ONLY
-        !showExpandedUI -> EpisodeScreenLayoutMode.COMPACT
-        vm.sidebarVisible -> EpisodeScreenLayoutMode.WIDE
-        else -> EpisodeScreenLayoutMode.VIDEO_ONLY
-    }
+    val mode = episodeScreenLayoutMode(
+        isFullscreen = vm.isFullscreen,
+        showExpandedUI = showExpandedUI,
+        sidebarVisible = vm.sidebarVisible,
+        isDesktop = LocalPlatform.current.isDesktop(),
+    )
 
     EpisodeScreenLayout(
         mode,
@@ -1047,7 +1050,6 @@ private fun EpisodeVideo(
 ) {
     val context by rememberUpdatedState(LocalContext.current)
     val navigator = LocalNavigator.current
-    val isAndroid = LocalPlatform.current.isAndroid()
 
     // 回到前台、进出全屏后都先隐藏控制器
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
@@ -1088,6 +1090,15 @@ private fun EpisodeVideo(
         }
     }
     val fullscreenState = rememberEpisodeFullscreenState(vm)
+
+    val screenshot = rememberPlayerScreenshotController(vm.player)
+    fun takeScreenshot() = screenshot.take(
+        playerScreenshotFileName(
+            subjectId = vm.subjectId,
+            episodeSort = page.episodePresentation.ep,
+            positionMillis = vm.player.currentPositionMillis.value,
+        ),
+    )
 
     val pictureInPictureController = LocalPictureInPictureController.current
     val isInPictureInPicture by pictureInPictureController.isInPictureInPicture.collectAsStateWithLifecycle()
@@ -1136,21 +1147,17 @@ private fun EpisodeVideo(
                 playerControllerState = playerControllerState,
             )
         },
-        onClickScreenshot = {
-            val currentPositionMillis = vm.player.currentPositionMillis.value
-            val min = currentPositionMillis / 60000
-            val sec = (currentPositionMillis - (min * 60000)) / 1000
-            val ms = currentPositionMillis - (min * 60000) - (sec * 1000)
-            val currentPosition = "${min}m${sec}s${ms}ms"
-            // 条目ID-剧集序号-视频时间点.png
-            val filename = "${vm.subjectId}-${page.episodePresentation.ep}-${currentPosition}.png"
-            scope.launch {
-                if (isAndroid) {
-                    takeAndroidPlayerScreenshot(context, vm.player, filename)
-                } else {
-                    vm.player.features[Screenshots]?.takeScreenshot(filename)
-                }
-            }
+        onClickScreenshot = if (screenshot.isSupported) ::takeScreenshot else null,
+        screenshotOverlay = { bottomControllerHeight ->
+            PlayerScreenshotOverlay(
+                screenshot.panelState,
+                onShare = screenshot::share,
+                onCopy = screenshot::copy,
+                onOpen = screenshot::open,
+                Modifier.matchParentSize(),
+                bottomOffset = bottomControllerHeight,
+                windowInsets = windowInsets,
+            )
         },
         detachedProgressSlider = {
             PlayerControllerDefaults.MediaProgressSlider(
@@ -1300,7 +1307,10 @@ private fun EpisodeVideo(
         onClickCache = { navigator.navigateSubjectCaches(vm.subjectId) },
         modifier = modifier
             .fillMaxWidth().background(Color.Black)
-            .then(if (expanded) Modifier.fillMaxSize() else Modifier.statusBarsPadding()),
+            // 播放器节点在进出全屏时保持不变, 状态栏 padding 必须始终挂载, 只切换 insets 的值.
+            // iOS 上 statusBarsPadding() 被插入已挂载的节点时找不到自己的 padding 节点, padding 会一直是 0.
+            .windowInsetsPadding(if (expanded) WindowInsets(0.dp) else WindowInsets.statusBars)
+            .then(if (expanded) Modifier.fillMaxSize() else Modifier),
         maintainAspectRatio = maintainAspectRatio,
         contentWindowInsets = windowInsets,
         fastForwardSpeed = vm.videoScaffoldConfig.fastForwardSpeed,
