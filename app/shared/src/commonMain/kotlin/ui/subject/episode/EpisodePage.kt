@@ -662,6 +662,9 @@ private fun EpisodeScreenSidebar(
                             onAdjustDanmakuSourceShift = { serviceId, shiftMillis ->
                                 vm.setDanmakuSourceShiftMillis(serviceId, shiftMillis)
                             },
+                            onSetDanmakuTextConversion = vm::setDanmakuTextConversionOverride,
+                            onSetDanmakuTextConversionGlobal = vm::setDanmakuTextConversionGlobal,
+                            onResetDanmakuTextConversionOverrides = vm::resetDanmakuTextConversionOverrides,
                             onClickLogin = { navigator.navigateBangumiAuthorize() },
                             onClickTag = { navigator.navigateSubjectSearch(it.name) },
                             onManualMatchDanmaku = vm::startMatchingDanmakuForService,
@@ -816,6 +819,9 @@ private fun EpisodeScreenPhoneDetails(
                     onAdjustDanmakuSourceShift = { serviceId, shiftMillis ->
                         vm.setDanmakuSourceShiftMillis(serviceId, shiftMillis)
                     },
+                    onSetDanmakuTextConversion = vm::setDanmakuTextConversionOverride,
+                    onSetDanmakuTextConversionGlobal = vm::setDanmakuTextConversionGlobal,
+                    onResetDanmakuTextConversionOverrides = vm::resetDanmakuTextConversionOverrides,
                     onClickLogin = { navigator.navigateBangumiAuthorize() },
                     onClickTag = { navigator.navigateSubjectSearch(it.name) },
                     onManualMatchDanmaku = vm::startMatchingDanmakuForService,
@@ -1228,6 +1234,11 @@ private fun EpisodeVideo(
                                     onSetEnabled = vm::setDanmakuSourceEnabled,
                                     onManualMatch = vm::startMatchingDanmakuForService,
                                     onAdjustShift = vm::setDanmakuSourceShiftMillis,
+                                    globalTextConversion = sourceState.globalTextConversion,
+                                    textConversionOverrides = sourceState.textConversionOverrides,
+                                    onSetTextConversionGlobal = vm::setDanmakuTextConversionGlobal,
+                                    onSetTextConversion = vm::setDanmakuTextConversionOverride,
+                                    onResetTextConversionOverrides = vm::resetDanmakuTextConversionOverrides,
                                 )
                             },
                             onDismissRequest = { goBack() },
